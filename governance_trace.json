@@ -1,0 +1,39 @@
+{
+  "output_hash": "99d563703c2f0124c5c36c5cdcd194cdbe96d415d5c5d959e21f28a943a322d0",
+  "gov_structure": {
+    "G": [
+      "THIS",
+      "BECAUSE"
+    ],
+    "S": [
+      "INSIDE/OUTSIDE",
+      "TOGETHER/ALONE"
+    ],
+    "F": [
+      "CAN/CANNOT",
+      "MUST/LET"
+    ]
+  },
+  "gates": {
+    "G1_structural": "PASS",
+    "G2_completeness": "PASS",
+    "G3_witnesses": "PASS",
+    "G4_viki": "PASS (0 patterns)",
+    "G5_provenance": "PASS",
+    "G6_semantic": "PASS",
+    "G7_behavioral": "PASS"
+  },
+  "witness_commitment": {
+    "hash": "da631783ad45a59d1692527b0c4bc19efdbd4c6df24201717e2dc7e2944e5627",
+    "unanimous": true,
+    "count": 7
+  },
+  "tig_status": "T",
+  "phases": [
+    "PROPOSE",
+    "DECIDE",
+    "PROMOTE",
+    "EXECUTE"
+  ],
+  "timestamp": "2026-03-30T18:43:14.171319+00:00"
+}

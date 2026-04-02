@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.env
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+*.tar.gz
+*.zip
+
+# Generated corpus (retrain from public sources)
+corpus/public/
