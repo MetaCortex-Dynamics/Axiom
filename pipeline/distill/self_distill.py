@@ -169,9 +169,26 @@ def run_self_distillation(
         total_t += round_t
         total_f += round_f
         elapsed = time.time() - t0
-        print(f"  Round {round_idx+1}/{n_rounds}: +{round_t} T-status, {round_f} rejected, total={total_t} ({elapsed:.0f}s)")
+        print(f"  Round {round_idx+1}/{n_rounds}: +{round_t} T-status, {round_f} rejected, total={total_t} ({elapsed:.0f}s)", flush=True)
 
-    # Save
+        # Save EVERY 10 rounds — to local AND Drive if available
+        if (round_idx + 1) % 10 == 0 or round_idx == n_rounds - 1:
+            os.makedirs(output_dir, exist_ok=True)
+            local_path = f"{output_dir}/self_distilled_pairs.json"
+            with open(local_path, "w", encoding="utf-8") as f:
+                json.dump(all_pairs, f, ensure_ascii=False)
+            # Save to Google Drive if mounted
+            drive_dir = "/content/drive/MyDrive/axiom_distilled"
+            if os.path.exists("/content/drive/MyDrive"):
+                os.makedirs(drive_dir, exist_ok=True)
+                drive_path = f"{drive_dir}/self_distilled_{total_t}_pairs.json"
+                with open(drive_path, "w", encoding="utf-8") as f:
+                    json.dump(all_pairs, f, ensure_ascii=False)
+                print(f"    Saved {total_t} pairs to Drive: {drive_path}", flush=True)
+            else:
+                print(f"    Saved {total_t} pairs locally (Drive not mounted)", flush=True)
+
+    # Final save
     output_path = f"{output_dir}/self_distilled_pairs.json"
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(all_pairs, f, ensure_ascii=False)
