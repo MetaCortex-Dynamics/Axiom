@@ -74,7 +74,13 @@ def main():
             el += losses["total"].item() if hasattr(losses["total"],"item") else losses["total"]
             b += 1
         avg = el/max(b,1)
-        if avg < best: best = avg; torch.save(model.state_dict(),"models/axiom-500m-v2/decoder_best.pt")
+        if avg < best:
+            best = avg
+            torch.save(model.state_dict(),"models/axiom-500m-v2/decoder_best.pt")
+            # Save to Drive EVERY time we beat best loss
+            drive_path = "/content/drive/MyDrive/axiom_500m_32k_decoder.pt"
+            if os.path.exists("/content/drive/MyDrive"):
+                torch.save(model.state_dict(), drive_path)
         if ep<=3 or ep%5==0 or ep==EPOCHS:
             print(f"E{ep:3d}: L={avg:.4f} ce={losses['ce']:.4f} best={best:.4f} {time.time()-t0:.0f}s",flush=True)
 
