@@ -18,7 +18,7 @@ MAX_S = 40; MAX_P = 256; BATCH = 8; ACCUM = 4; LR = 2e-4; EPOCHS = 50; WARM = 3
 
 def load_pairs():
     pairs = []
-    for path in ["corpus/axiom/pairs.json", "corpus/distilled/self_distilled_pairs.json"]:
+    for path in ["corpus/axiom/pairs.json", "corpus/distilled/self_distilled_pairs.json", "corpus/teacher/teacher_pairs.json"]:
         if os.path.exists(path):
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
@@ -29,7 +29,7 @@ def load_pairs():
     return pairs
 
 def main():
-    print("=== P2: Retrain 500M on 12K pairs ===")
+    print("=== P2: Train 500M on 32K pairs (3 teachers) ===")
     tok = Tokenizer.from_file("models/axiom/bpe_tokenizer.json")
     bv = tok.get_vocab_size()
     PAD_T = tok.token_to_id("<pad>"); BOS = tok.token_to_id("<bos>"); EOS = tok.token_to_id("<eos>")
