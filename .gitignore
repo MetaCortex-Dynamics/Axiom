@@ -11,3 +11,5 @@ venv/
 
 # Generated corpus (retrain from public sources)
 corpus/public/
+models/axiom-500m/
+models/axiom-500m-v2/
