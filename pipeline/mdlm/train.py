@@ -34,7 +34,7 @@ from pipeline.mdlm.model import (
     MaskingSchedule, StructureModel, compute_loss, generate,
 )
 
-PHI_CONTRACTION_RATE = 0.381966  # (3 - sqrt(5)) / 2
+PHI_CONTRACTION_RATE = 0.381966
 
 
 def train(

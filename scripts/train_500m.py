@@ -1,5 +1,5 @@
 """
-PLAN-AXIOM-001 Phase 1: Train Axiom 500M decoder.
+Train Axiom 500M decoder.
 
 Protocol loss: L = L_ce + 0.1*L_telos + 0.1*L_witness + 0.05*L_audit
 Gradient checkpointing + bf16 for 8GB VRAM.
@@ -36,7 +36,7 @@ WARMUP = 5
 
 
 def main():
-    print("=== PLAN-AXIOM-001 Phase 1: Axiom 500M ===")
+    print("=== Train Axiom 500M ===")
 
     # Load BPE tokenizer
     tokenizer = Tokenizer.from_file("models/axiom/bpe_tokenizer.json")

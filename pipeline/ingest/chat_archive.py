@@ -1,11 +1,11 @@
 """
 Ingest ChatGPT conversation archives into the governed pipeline.
 
-Reads individual conversation JSON files (theory-archive format)
+Reads individual conversation JSON files
 or the bulk conversations.json from ChatGPT data export.
 
 Each message becomes a candidate Segment for S2 classification.
-Technical messages (MaL reasoning, governance proofs, operator derivations)
+Technical messages (governance reasoning, proofs, operator derivations)
 proceed to S3 decomposition. Non-technical messages are excluded.
 """
 
@@ -23,7 +23,7 @@ from pipeline.types import SourceProvenance, Tier
 
 
 def ingest_conversation_file(path: str | Path) -> Iterator[Segment]:
-    """Ingest a single conversation JSON file (theory-archive format)."""
+    """Ingest a single conversation JSON file."""
     path = Path(path)
     with open(path, encoding="utf-8") as f:
         conv = json.load(f)
@@ -40,7 +40,7 @@ def ingest_conversation_file(path: str | Path) -> Iterator[Segment]:
     provenance = SourceProvenance(
         source_id=f"chat:{conv_id}",
         tier=Tier.T3,
-        url=f"theory-archive/{path.name}",
+        url=f"archive/{path.name}",
         commit_or_version=timestamp,
         license="proprietary",
         acquired_at=datetime.now(timezone.utc).isoformat(),

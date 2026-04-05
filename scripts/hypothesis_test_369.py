@@ -1,5 +1,5 @@
 """
-hierarchical Hypothesis Test — 4-way comparison per PLAN-GHA-002 §4.4.
+Masking schedule hypothesis test — 4-way comparison.
 
 Variant A: hierarchical hierarchical (Tier 1 → Tier 2 → CL+readiness)
 Variant B: flat hierarchical (operators only)

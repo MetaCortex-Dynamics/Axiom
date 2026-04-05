@@ -1,5 +1,5 @@
 """
-Governance Benchmark Suite — PLAN-AXIOM-001 Phase 4
+Governance Benchmark Suite
 
 The benchmark that only governed models can pass.
 Run any model's output through this suite. Score 0-100%.

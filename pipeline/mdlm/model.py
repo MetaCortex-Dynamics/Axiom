@@ -13,7 +13,7 @@ Masking schedules:
   C: Uniform random
   D: inverted inverted
 
-Per PLAN-GHA-002 §4.4: A > B > C > D predicted.
+Prediction: A > B > C > D.
 """
 
 from __future__ import annotations

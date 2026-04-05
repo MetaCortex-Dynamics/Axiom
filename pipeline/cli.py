@@ -14,7 +14,7 @@ import sys
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Governed Decomposition Pipeline (SPEC-PIPELINE-001)"
+        description="Governed Decomposition Pipeline"
     )
     sub = parser.add_subparsers(dest="command")
 

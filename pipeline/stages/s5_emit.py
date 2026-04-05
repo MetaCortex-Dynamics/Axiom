@@ -1,7 +1,7 @@
 """
 S5: EMIT — Write validated FrameExamples to CORPUS-SEMI-001/.
 
-Per SPEC-PIPELINE-001 Part B.2:
+Per specification:
   Format: One JSONL file per source, each line a complete FrameExample.
   Corpus-level manifest.json with aggregate statistics.
   Provenance chain: source → segment → classification → decomposition →
@@ -90,7 +90,7 @@ def emit(
 
     # Write corpus manifest
     manifest = {
-        "spec": "SPEC-PIPELINE-001 v0.1.0",
+        "spec": "governed-pipeline-v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "statistics": {
             "total_pass": total_pass,

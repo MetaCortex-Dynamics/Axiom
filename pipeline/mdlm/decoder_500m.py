@@ -1,5 +1,5 @@
 """
-Axiom 500M Decoder — Phase 1 of PLAN-AXIOM-001
+Axiom 500M Decoder
 
 24 layers, 16 heads, 1024 hidden, 8192 BPE vocab.
 Frozen MDLM encoder (934K) via cross-attention.

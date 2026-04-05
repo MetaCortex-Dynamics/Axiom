@@ -1,7 +1,7 @@
 """
 S1: SEGMENT — Split input into atomic units.
 
-Per SPEC-PIPELINE-001 Part B.2:
+Per specification:
   Verilog/SystemVerilog: split by module boundary.
   Natural language docs: split by section/paragraph.
   SVA: split by assertion.

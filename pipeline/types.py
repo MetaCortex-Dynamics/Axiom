@@ -5,7 +5,7 @@ These mirror the kernel's Rust types (kernel governance types)
 as Python dataclasses for pipeline processing. The kernel is the authority;
 these are the pipeline's working copies.
 
-SPEC-PIPELINE-001 Part B.3: Interface Contract with Kernel.
+Interface contract with kernel.
 """
 
 from __future__ import annotations
@@ -77,12 +77,12 @@ class Witness(IntEnum):
 
     @property
     def modality(self) -> str:
-        """governed modality per Universal Interrogative Theorem: G(WHENCE,WHEN), S(WHAT,WHERE,WHICH), F(FOR-WHAT,HOW)."""
+        """modality assignment: G(WHENCE,WHEN), S(WHAT,WHERE,WHICH), F(FOR-WHAT,HOW)."""
         return _WIT_MODALITY[self.value]
 
     @property
     def is_bridge_axis(self) -> bool:
-        """FOR-WHAT x WHERE = unique global cut set (Fragility Topology Theorem 16)."""
+        """FOR-WHAT x WHERE = critical axis."""
         return self in (Witness.FOR_WHAT, Witness.WHERE)
 
     @property
@@ -106,7 +106,7 @@ class Tier(str, Enum):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# PROVENANCE — SPEC-PIPELINE-001 Part A.4
+# PROVENANCE — Provenance record format
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @dataclass
@@ -118,7 +118,7 @@ class SourceProvenance:
     license: str
     acquired_at: str  # ISO 8601
     artifact_sha256: str
-    acquired_by: str = "Devon Generally"
+    acquired_by: str = ""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -188,7 +188,7 @@ class FrameExample:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# EXCLUSION MANIFEST — SPEC-PIPELINE-001 Part C
+# EXCLUSION MANIFEST — Exclusion manifest
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class ExclusionReason(str, Enum):
@@ -218,7 +218,7 @@ class ExclusionRecord:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# ORACLE — SPEC-PIPELINE-001 Part D
+# ORACLE — Oracle protocol
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class PipelineStage(str, Enum):
@@ -252,4 +252,4 @@ class OracleDecision:
     exclusion_reason: Optional[ExclusionReason] = None
     notes: str = ""
     decided_at: str = ""
-    decided_by: str = "Devon Generally"
+    decided_by: str = ""

@@ -128,9 +128,9 @@ def run_distillation(
             frame = p.get("frame", p.get("triad", {}))
             if frame:
                 structures.append({
-                    "G": frame.get("channel_a", frame.get("genealogical", {frame.get("G", {})})).get("operators", []) if isinstance(frame.get("channel_a", frame.get("genealogical", {})), dict) else [],
-                    "S": frame.get("channel_b", frame.get("structural", {})).get("operators", []) if isinstance(frame.get("channel_b", frame.get("structural", {})), dict) else [],
-                    "F": frame.get("channel_c", frame.get("functional", {})).get("operators", []) if isinstance(frame.get("channel_c", frame.get("functional", {})), dict) else [],
+                    "G": frame.get("channel_a", frame.get("channel_a", {frame.get("G", {})})).get("operators", []) if isinstance(frame.get("channel_a", frame.get("genealogical", {})), dict) else [],
+                    "S": frame.get("channel_b", frame.get("channel_b", {})).get("operators", []) if isinstance(frame.get("channel_b", frame.get("structural", {})), dict) else [],
+                    "F": frame.get("channel_c", frame.get("channel_c", {})).get("operators", []) if isinstance(frame.get("channel_c", frame.get("functional", {})), dict) else [],
                 })
     print(f"  Total structures: {len(structures)}")
 

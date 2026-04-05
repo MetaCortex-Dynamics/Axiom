@@ -1,12 +1,12 @@
 """
 S3: DECOMPOSE — Prose to (Ch.A, Ch.B, Ch.C) in 15-operator vocabulary.
 
-Per SPEC-PIPELINE-001 Part B.2:
+Per specification:
   (a) Identify channel_a content → Ch.A using WHENCE, WHEN
   (b) Identify channel_b content → Ch.B using WHAT, WHERE, WHICH
   (c) Identify channel_c content → Ch.C using FOR-WHAT, HOW
 
-T1 bypass: CecCert sources call extract_from_cert() directly.
+T1 bypass: structured sources use direct extraction.
 This module handles T2 (RTL docs) and T3 (formal properties).
 
 THIS IS THE CORE IP. The decomposer patterns are protected.
@@ -46,7 +46,7 @@ def decompose(classified: ClassifiedSegment) -> FrameExample | None:
 
 
 def _decompose_t1(seg: Segment) -> FrameExample:
-    """T1 bypass — CecCert extraction handled by kernel.
+    """T1 bypass — structured extraction.
 
     At pipeline level, T1 records are already structured. The kernel's
     extract_from_cert() does the actual projection. Here we wrap

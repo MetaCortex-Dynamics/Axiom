@@ -1,7 +1,7 @@
 """
 S2: CLASSIFY — Technical vs non-technical classification.
 
-Per SPEC-PIPELINE-001 Part B.2:
+Per specification:
   Rule-based classifier first (keyword density, channel_b markers).
   High-confidence → S3. Ambiguous → oracle queue.
 

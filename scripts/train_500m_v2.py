@@ -1,5 +1,5 @@
 """
-PLAN-AXIOM-001 P2: Train 500M on 32K pairs (3 teachers).
+Train 500M on 32K pairs (3 teachers).
 All 9 review fixes applied. Resumable. Drive-safe. Logged.
 """
 

@@ -1,4 +1,4 @@
-"""Pipeline stages S1-S5 per SPEC-PIPELINE-001 Part B."""
+"""Pipeline stages S1-S5."""
 
 from .s1_segment import segment
 from .s2_classify import classify
