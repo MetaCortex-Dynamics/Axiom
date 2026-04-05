@@ -34,8 +34,8 @@ This is not a marginal improvement. It is a different category of output.
 ## Reproduction
 
 ```bash
-git clone https://github.com/MetaCortex-Dynamics/Axiom-Ref.git
-cd Axiom-Ref
+git clone https://github.com/MetaCortex-Dynamics/Axiom.git
+cd Axiom
 pip install torch tokenizers
 python -c "
 from pipeline.benchmark.governance_suite import *

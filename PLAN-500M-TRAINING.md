@@ -56,8 +56,8 @@ print(f"PASS: wrote and read {size_mb:.0f}MB to Drive")
 ## Step 3: Clone + Install
 
 ```python
-!git clone https://github.com/MetaCortex-Dynamics/Axiom-Ref.git
-%cd Axiom-Ref
+!git clone https://github.com/MetaCortex-Dynamics/Axiom.git
+%cd Axiom
 !pip install -q torch tokenizers
 ```
 
