@@ -287,6 +287,7 @@ with gr.Blocks(
                     chatbot = gr.Chatbot(
                         label="Axiom",
                         height=400,
+                        type="tuples",
                     )
                     msg = gr.Textbox(
                         label="Message",
