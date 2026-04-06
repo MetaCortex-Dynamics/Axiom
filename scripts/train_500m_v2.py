@@ -21,9 +21,9 @@ MAX_S = 40; MAX_P = 256; BATCH = 8; ACCUM = 4; LR = 2e-4; EPOCHS = 50; WARM = 3
 LOCAL_DIR = "models/axiom-500m-v2"
 LOCAL_CKPT = f"{LOCAL_DIR}/checkpoint.pt"
 DRIVE_DIR = "/content/drive/MyDrive"
-DRIVE_CKPT = f"{DRIVE_DIR}/axiom_500m_32k_checkpoint.pt"
-DRIVE_TMP = f"{DRIVE_DIR}/axiom_500m_32k_checkpoint.tmp.pt"
-DRIVE_LOG = f"{DRIVE_DIR}/axiom_500m_train.log"
+DRIVE_CKPT = f"{DRIVE_DIR}/axiom_500m_56k_checkpoint.pt"
+DRIVE_TMP = f"{DRIVE_DIR}/axiom_500m_56k_checkpoint.tmp.pt"
+DRIVE_LOG = f"{DRIVE_DIR}/axiom_500m_56k_train.log"
 
 
 def log(msg, log_file=None):
@@ -39,7 +39,13 @@ def log(msg, log_file=None):
 
 def load_pairs():
     pairs = []
-    for path in ["corpus/axiom/pairs.json", "corpus/distilled/self_distilled_pairs.json", "corpus/teacher/teacher_pairs.json"]:
+    for path in [
+        "corpus/axiom/pairs.json",
+        "corpus/distilled/self_distilled_pairs.json",
+        "corpus/teacher/teacher_pairs.json",
+        "corpus/teacher/teacher_pairs_r2.json",
+        "corpus/conversational_pairs.json",
+    ]:
         if os.path.exists(path):
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
@@ -85,7 +91,7 @@ def main():
     has_drive = os.path.exists(DRIVE_DIR)
     lf = DRIVE_LOG if has_drive else None
 
-    log("=== P2: Train 500M on 32K pairs (3 teachers) ===", lf)
+    log("=== Train 500M on 56K pairs (5 sources, conversational + semiconductor) ===", lf)
 
     # [MUST] Create checkpoint directories
     os.makedirs(LOCAL_DIR, exist_ok=True)
