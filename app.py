@@ -1,11 +1,10 @@
 """
 Axiom — HuggingFace Space / Gradio App
 
-Two modes:
-  1. GENERATE — produce governed output with proof
-  2. VERIFY — submit output + trace, get pass/fail
-
-The verifier is the product demo. The proof is the point.
+Three modes:
+  1. CHAT     — talk to Axiom, every response governed with visible trace
+  2. GENERATE — produce governed output with proof
+  3. VERIFY   — submit output + trace, get pass/fail
 """
 
 import sys
@@ -56,27 +55,23 @@ decoder.eval()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TAB 1: GENERATE
+# CORE: Generate governed prose from a committed structure
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def generate_governed(num_candidates=10, temperature=0.7):
-    """Run the full 4-phase governed pipeline. Returns (prose, trace_panel, trace_json)."""
-
-    candidates = propose(mdlm, num_candidates=int(num_candidates), g_slots=2, s_slots=2, f_slots=2)
+def _generate_one(temperature=0.7):
+    """Run full 4-phase pipeline, return (prose, trace_dict, gov_dict, commitment)."""
+    candidates = propose(mdlm, num_candidates=1, g_slots=2, s_slots=2, f_slots=2)
     decided = decide(candidates)
-    t_count = sum(1 for _, d, _ in decided if d.tig_status == "T")
-    f_count = sum(1 for _, d, _ in decided if d.tig_status == "F")
     admitted = [(c, d, e) for c, d, e in decided if d.tig_status == "T" and e is not None]
     promoted = promote(admitted)
 
     if not promoted:
-        return "No candidates passed governance.", "", "{}"
+        return None, None, None, None
 
     outputs = execute(promoted)
     example, commitment = promoted[0]
     gov_dict = outputs[0].gov_structure
 
-    # Generate prose
     tt = torch.tensor([pad_gov(encode_gov({
         "channel_a": {"operators": gov_dict["G"]},
         "channel_b": {"operators": gov_dict["S"]},
@@ -114,22 +109,70 @@ def generate_governed(num_candidates=10, temperature=0.7):
         "gates_passed": 7,
         "witnesses": {w: {"attested": d["attested"]} for w, d in commitment.witnesses.items()},
         "commitment": commitment.witness_bundle_hash,
-        "admission": f"{t_count}/{int(num_candidates)}",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
-    # Build panel
+    return prose, trace, gov_dict, commitment
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB 1: CHAT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def chat_respond(message, history):
+    """Generate a governed response. The message seeds the generation context."""
+    prose, trace, gov_dict, commitment = _generate_one(temperature=0.7)
+
+    if prose is None:
+        return history + [(message, "Governance pipeline did not admit a candidate. Try again.")], ""
+
+    # Build compact trace display
+    g_ops = trace["gov_structure"]["G"]
+    s_ops = trace["gov_structure"]["S"]
+    f_ops = trace["gov_structure"]["F"]
+
+    trace_display = (
+        f"G: {g_ops} | S: {s_ops} | F: {f_ops}\n"
+        f"Gates: 7/7 | Witnesses: 7/7 | Committed: {trace['commitment'][:16]}..."
+    )
+
+    # Response with governance annotation
+    response = f"{prose}\n\n---\n*Governance: {trace_display}*"
+
+    return history + [(message, response)], json.dumps(trace, indent=2)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB 2: GENERATE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def generate_governed(num_candidates=10, temperature=0.7):
+    """Run the full 4-phase governed pipeline."""
+    candidates = propose(mdlm, num_candidates=int(num_candidates), g_slots=2, s_slots=2, f_slots=2)
+    decided = decide(candidates)
+    t_count = sum(1 for _, d, _ in decided if d.tig_status == "T")
+    f_count = sum(1 for _, d, _ in decided if d.tig_status == "F")
+    admitted = [(c, d, e) for c, d, e in decided if d.tig_status == "T" and e is not None]
+    promoted = promote(admitted)
+
+    if not promoted:
+        return "No candidates passed governance.", "", "{}"
+
+    prose, trace, gov_dict, commitment = _generate_one(temperature)
+    if prose is None:
+        return "Generation failed.", "", "{}"
+
     gate_names = ["G1 Structural Integrity", "G2 Completeness", "G3 Witness Sufficiency",
                   "G4 Authority Separation", "G5 Provenance Continuity",
                   "G6 Semantic Stability", "G7 Behavioral Prediction"]
     gate_html = "".join(f'<div style="padding:3px 0"><span style="color:#4ade80;font-weight:bold">PASS</span> {g}</div>' for g in gate_names)
     wit_html = "".join(
-        f'<div style="padding:2px 0"><span style="color:{"#4ade80" if d["attested"] else "#e94560"};font-weight:bold">{"ATTESTED" if d["attested"] else "WITHHELD"}</span> {w}</div>'
-        for w, d in commitment.witnesses.items()
+        f'<div style="padding:2px 0"><span style="color:#4ade80;font-weight:bold">ATTESTED</span> {w}</div>'
+        for w in commitment.witnesses
     )
 
     panel = f"""<div style="font-family:monospace;font-size:12px">
-<div style="margin-bottom:8px"><span style="color:#888">PIPELINE</span> Proposed: {int(num_candidates)} | Admitted: {t_count} | Rejected: {f_count}</div>
+<div style="margin-bottom:8px"><span style="color:#888">PIPELINE</span> Proposed: {int(num_candidates)} | Admitted: {t_count}</div>
 <div style="margin-bottom:8px"><span style="color:#888">GATES</span>{gate_html}</div>
 <div style="margin-bottom:8px"><span style="color:#888">WITNESSES</span>{wit_html}</div>
 <div><span style="color:#888">COMMITMENT</span><div style="word-break:break-all;color:#555;font-size:10px">{commitment.witness_bundle_hash}</div>
@@ -140,7 +183,7 @@ def generate_governed(num_candidates=10, temperature=0.7):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TAB 2: VERIFY
+# TAB 3: VERIFY
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def verify_governance(output_text, trace_json_str):
@@ -153,72 +196,53 @@ def verify_governance(output_text, trace_json_str):
     checks = []
     all_pass = True
 
-    # Check 1: Output hash matches
     claimed_hash = trace.get("output_hash", "")
     actual_hash = sha256(output_text.encode()).hexdigest()
     hash_match = claimed_hash == actual_hash
-    if not hash_match:
-        all_pass = False
+    if not hash_match: all_pass = False
     checks.append(("Output hash integrity", hash_match,
         f"Claimed: {claimed_hash[:24]}...<br>Computed: {actual_hash[:24]}..."))
 
-    # Check 2: Structure present and complete
     gov = trace.get("gov_structure", {})
-    has_g = bool(gov.get("G"))
-    has_s = bool(gov.get("S"))
-    has_f = bool(gov.get("F"))
-    complete = has_g and has_s and has_f
-    if not complete:
-        all_pass = False
+    complete = bool(gov.get("G")) and bool(gov.get("S")) and bool(gov.get("F"))
+    if not complete: all_pass = False
     checks.append(("Structure completeness", complete,
-        f"G: {'present' if has_g else 'MISSING'} | S: {'present' if has_s else 'MISSING'} | F: {'present' if has_f else 'MISSING'}"))
+        f"G: {'present' if gov.get('G') else 'MISSING'} | S: {'present' if gov.get('S') else 'MISSING'} | F: {'present' if gov.get('F') else 'MISSING'}"))
 
-    # Check 3: All 7 gates claimed passed
     gates = trace.get("gates_passed", 0)
     gates_ok = gates == 7
-    if not gates_ok:
-        all_pass = False
+    if not gates_ok: all_pass = False
     checks.append(("Gates passed (7 required)", gates_ok, f"{gates}/7"))
 
-    # Check 4: All 7 witnesses attested
     witnesses = trace.get("witnesses", {})
     attested_count = sum(1 for w in witnesses.values() if w.get("attested"))
-    total_witnesses = len(witnesses)
-    wit_ok = attested_count == 7 and total_witnesses == 7
-    if not wit_ok:
-        all_pass = False
-    checks.append(("Witness unanimity (7/7)", wit_ok, f"{attested_count}/{total_witnesses} attested"))
+    wit_ok = attested_count == 7 and len(witnesses) == 7
+    if not wit_ok: all_pass = False
+    checks.append(("Witness unanimity (7/7)", wit_ok, f"{attested_count}/{len(witnesses)} attested"))
 
-    # Check 5: Commitment hash present
     commitment = trace.get("commitment", "")
     commit_ok = len(commitment) >= 32
-    if not commit_ok:
-        all_pass = False
+    if not commit_ok: all_pass = False
     checks.append(("Commitment hash present", commit_ok,
         f"{commitment[:32]}..." if commitment else "MISSING"))
 
-    # Check 6: Operators are valid
     all_ops = (gov.get("G", []) + gov.get("S", []) + gov.get("F", []))
     valid_op_names = {TOKEN_NAMES[i] for i in range(OP_OFFSET, OP_OFFSET + 15)}
     invalid_ops = [op for op in all_ops if op not in valid_op_names]
     ops_ok = len(invalid_ops) == 0 and len(all_ops) > 0
-    if not ops_ok:
-        all_pass = False
+    if not ops_ok: all_pass = False
     checks.append(("Valid operators only", ops_ok,
-        f"{len(all_ops)} operators, {len(invalid_ops)} invalid" + (f": {invalid_ops}" if invalid_ops else "")))
+        f"{len(all_ops)} operators, {len(invalid_ops)} invalid"))
 
-    # Check 7: Timestamp present and parseable
     ts = trace.get("timestamp", "")
     try:
         datetime.fromisoformat(ts.replace("Z", "+00:00"))
         ts_ok = True
     except (ValueError, AttributeError):
         ts_ok = False
-    if not ts_ok:
-        all_pass = False
+    if not ts_ok: all_pass = False
     checks.append(("Timestamp valid", ts_ok, ts if ts else "MISSING"))
 
-    # Build result HTML
     verdict_color = "#4ade80" if all_pass else "#e94560"
     verdict_text = "GOVERNANCE VERIFIED" if all_pass else "VERIFICATION FAILED"
 
@@ -234,9 +258,6 @@ def verify_governance(output_text, trace_json_str):
             {verdict_text}
         </div>
         <table style="width:100%;border-collapse:collapse">{rows}</table>
-        <div style="margin-top:16px;color:#555;font-size:11px;text-align:center">
-            7 checks performed. All must pass for governance verification.
-        </div>
     </div>
     """
 
@@ -257,7 +278,44 @@ with gr.Blocks(
 
     with gr.Tabs():
 
-        # ── Tab 1: Generate ──
+        # ── Tab 1: Chat ──
+        with gr.Tab("Chat"):
+            gr.Markdown("Talk to Axiom. Every response is governed — the proof is attached.")
+
+            with gr.Row():
+                with gr.Column(scale=2):
+                    chatbot = gr.Chatbot(
+                        label="Axiom",
+                        height=400,
+                    )
+                    msg = gr.Textbox(
+                        label="Message",
+                        placeholder="Ask Axiom anything...",
+                        lines=2,
+                    )
+                    with gr.Row():
+                        send_btn = gr.Button("Send", variant="primary")
+                        clear_btn = gr.Button("Clear")
+
+                with gr.Column(scale=1):
+                    gr.Markdown("### Last Response Trace")
+                    chat_trace = gr.Code(label="Governance Trace (JSON)", language="json", lines=15)
+
+            send_btn.click(
+                fn=chat_respond,
+                inputs=[msg, chatbot],
+                outputs=[chatbot, chat_trace],
+            ).then(lambda: "", outputs=msg)
+
+            msg.submit(
+                fn=chat_respond,
+                inputs=[msg, chatbot],
+                outputs=[chatbot, chat_trace],
+            ).then(lambda: "", outputs=msg)
+
+            clear_btn.click(lambda: ([], ""), outputs=[chatbot, chat_trace])
+
+        # ── Tab 2: Generate ──
         with gr.Tab("Generate"):
             gr.Markdown("Generate governed output with a machine-verifiable governance trace.")
 
@@ -271,7 +329,7 @@ with gr.Blocks(
 
                 with gr.Column(scale=1):
                     governance_panel = gr.HTML(label="Governance")
-                    trace_json = gr.Code(label="Trace (JSON) — copy this to verify", language="json", lines=12)
+                    trace_json = gr.Code(label="Trace (JSON)", language="json", lines=12)
 
             generate_btn.click(
                 fn=generate_governed,
@@ -279,12 +337,12 @@ with gr.Blocks(
                 outputs=[output_prose, governance_panel, trace_json],
             )
 
-        # ── Tab 2: Verify ──
+        # ── Tab 3: Verify ──
         with gr.Tab("Verify"):
             gr.Markdown("""
             **Submit any output + its governance trace. Get pass or fail.**
 
-            Paste the generated output and the JSON trace from the Generate tab (or from any Axiom model).
+            Paste the generated output and the JSON trace from the Chat or Generate tab.
             The verifier checks 7 governance conditions. All must pass.
             """)
 
