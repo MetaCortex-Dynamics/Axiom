@@ -124,9 +124,11 @@ def chat_respond(message, history):
     prose, trace, gov_dict, commitment = _generate_one(temperature=0.7)
 
     if prose is None:
-        return history + [(message, "Governance pipeline did not admit a candidate. Try again.")], ""
+        history = history or []
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": "Governance pipeline did not admit a candidate. Try again."})
+        return history, ""
 
-    # Build compact trace display
     g_ops = trace["gov_structure"]["G"]
     s_ops = trace["gov_structure"]["S"]
     f_ops = trace["gov_structure"]["F"]
@@ -136,10 +138,13 @@ def chat_respond(message, history):
         f"Gates: 7/7 | Witnesses: 7/7 | Committed: {trace['commitment'][:16]}..."
     )
 
-    # Response with governance annotation
     response = f"{prose}\n\n---\n*Governance: {trace_display}*"
 
-    return history + [(message, response)], json.dumps(trace, indent=2)
+    history = history or []
+    history.append({"role": "user", "content": message})
+    history.append({"role": "assistant", "content": response})
+
+    return history, json.dumps(trace, indent=2)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -268,7 +273,6 @@ def verify_governance(output_text, trace_json_str):
 
 with gr.Blocks(
     title="Axiom: Governed Language Model",
-    theme=gr.themes.Base(primary_hue="green", neutral_hue="slate"),
 ) as app:
 
     gr.Markdown("""
@@ -287,7 +291,6 @@ with gr.Blocks(
                     chatbot = gr.Chatbot(
                         label="Axiom",
                         height=400,
-                        type="tuples",
                     )
                     msg = gr.Textbox(
                         label="Message",
@@ -314,7 +317,7 @@ with gr.Blocks(
                 outputs=[chatbot, chat_trace],
             ).then(lambda: "", outputs=msg)
 
-            clear_btn.click(lambda: ([], ""), outputs=[chatbot, chat_trace])
+            clear_btn.click(lambda: (None, ""), outputs=[chatbot, chat_trace])
 
         # ── Tab 2: Generate ──
         with gr.Tab("Generate"):
@@ -368,4 +371,4 @@ with gr.Blocks(
     """)
 
 if __name__ == "__main__":
-    app.launch()
+    app.launch(theme=gr.themes.Base(primary_hue="green", neutral_hue="slate"))
