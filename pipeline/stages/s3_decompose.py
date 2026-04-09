@@ -9,7 +9,7 @@ Per specification:
 T1 bypass: structured sources use direct extraction.
 This module handles T2 (RTL docs) and T3 (formal properties).
 
-THIS IS THE CORE IP. The decomposer patterns are protected.
+Scaffold decomposer -- keyword-based operator assignment.
 """
 
 from __future__ import annotations
