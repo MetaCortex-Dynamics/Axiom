@@ -74,9 +74,12 @@ python demo.py
 
 Saves a machine-verifiable `governance_trace.json` with every output.
 
-### Colab Notebook
+### Colab Notebooks
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MetaCortex-Dynamics/Axiom/blob/main/Axiom_Demo.ipynb)
+| | |
+|---|---|
+| [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MetaCortex-Dynamics/Axiom/blob/main/Axiom_Demo.ipynb) | **General Demo** — Full 4-phase governed generation pipeline |
+| [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MetaCortex-Dynamics/Axiom/blob/main/Axiom_Semiconductor_Demo.ipynb) | **Semiconductor Verification** — RTL module → governed formal properties. Upload your own SystemVerilog |
 
 ### Retrain from Scratch
 
