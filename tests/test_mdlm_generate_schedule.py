@@ -216,12 +216,14 @@ def test_mask_prediction_retries_and_never_survives(schedule):
 
 @pytest.mark.parametrize("schedule", TIERED)
 @pytest.mark.parametrize("invalid", [PAD, G_OPEN])
-def test_invalid_tier_0_prediction_waits_for_final_step(schedule, invalid):
+def test_invalid_tier_0_prediction_is_never_committed(schedule, invalid):
+    # R1 supersedes adopted label L6 (tier 0 committed at step 0): out-of-slot
+    # tokens are excluded before sampling (test_mdlm_generate_domain.py, V1).
     def fn(i, step):
         return invalid if i == G_POS[0] else (TIER_1 if i in G_POS + S_POS + F_POS else
                                               (ATTESTED if i in W_POS else None))
-    stub, _ = _run(fn, schedule)
-    assert _commit(stub, G_POS[0]) == 0
+    stub, out = _run(fn, schedule)
+    assert out[0, G_POS[0]].item() in range(OP_OFFSET, OP_OFFSET + 15)
 
 
 @pytest.mark.parametrize("schedule", TIERED)
