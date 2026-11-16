@@ -9,7 +9,7 @@ Architecture:
 
 Masking schedules:
   A: hierarchical hierarchical (Tier 1 → Tier 2 → Tier 3+readiness)
-  B: flat hierarchical (operators only, no readiness staging)
+  B: flat (3-6-6): operator tiers as in A, readiness tokens in Tier 2
   C: Uniform random
   D: inverted inverted
 
@@ -33,8 +33,10 @@ except ImportError:
 from pipeline.mdlm.tokenizer import (
     VOCAB_SIZE, MASK, PAD, NEVER_MASKED,
     TIER_1_TOKENS, TIER_2_TOKENS, TIER_3_TOKENS,
+    WIT_OFFSET, ATTESTED, WITHHELD,
     get_tier, pad_sequence,
 )
+from pipeline.types import Witness
 
 
 class MaskingSchedule(str, Enum):
@@ -43,6 +45,21 @@ class MaskingSchedule(str, Enum):
     FLAT = "B"  # flat: operators only, uniform within tiers
     UNIFORM = "C"           # uniform random over all maskable tokens
     INVERTED = "D"      # inverted: CL first, Tier 1 last
+
+
+# Readiness tokens: the 7 witness-identity tokens plus ATTESTED and WITHHELD.
+READINESS_TOKENS = frozenset({WIT_OFFSET + w for w in Witness} | {ATTESTED, WITHHELD})
+
+
+def schedule_tier(token_id: int, schedule: MaskingSchedule) -> int:
+    """Masking tier of a token under a schedule.
+
+    HIERARCHICAL (3-6-9) keeps readiness tokens in Tier 3.
+    FLAT (3-6-6) demotes them to Tier 2. Operator tiers are shared.
+    """
+    if schedule == MaskingSchedule.FLAT and token_id in READINESS_TOKENS:
+        return 2
+    return get_tier(token_id)
 
 
 if HAS_TORCH:
@@ -112,7 +129,7 @@ if HAS_TORCH:
                 if tok in NEVER_MASKED:
                     continue
 
-                tier = get_tier(tok)
+                tier = schedule_tier(tok, schedule)
                 if tier == 0:
                     continue
 
@@ -150,7 +167,8 @@ if HAS_TORCH:
                 return base_rate * min(1.0, t_frac / 0.33)
 
         if schedule == MaskingSchedule.FLAT:
-            # Same as 369 but witness tokens are tier 2 priority
+            # Same per-tier timing as HIERARCHICAL; readiness tokens arrive
+            # here as tier 2 via schedule_tier().
             if tier == 1:
                 return base_rate * max(0.0, (t_frac - 0.66) / 0.34) if t_frac > 0.66 else 0.0
             elif tier == 2:
@@ -204,6 +222,30 @@ if HAS_TORCH:
         return loss
 
 
+    def _generate_band_open(tier: int, t_frac: float, schedule: MaskingSchedule) -> bool:
+        """Whether a predicted token of this tier may be committed at t_frac.
+
+        generate() counts steps down, so t_frac runs from 1 to 0. HIERARCHICAL
+        commits tier 1 first and tier 3 last, the reverse of its training
+        schedule. FLAT shares those operator bands; its readiness tokens arrive
+        as tier 2 via schedule_tier. INVERTED swaps tiers 1 and 3. UNIFORM is
+        left as it was: it commits on the first pass.
+        """
+        if schedule == MaskingSchedule.UNIFORM:
+            return True
+        if schedule == MaskingSchedule.INVERTED and tier in (1, 3):
+            tier = 4 - tier
+        return (tier == 1 and t_frac >= 0.66) or \
+            (tier == 2 and 0.33 <= t_frac < 0.66) or \
+            (tier == 3 and t_frac < 0.33)
+
+
+    def _require_int(name: str, value, minimum: int) -> None:
+        """Input domain check for generate(): an int (not bool) >= minimum."""
+        if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+            raise ValueError(f"{name} must be an int >= {minimum}, got {value!r}")
+
+
     def generate(
         model: StructureModel,
         num_samples: int,
@@ -226,11 +268,22 @@ if HAS_TORCH:
 
         g_slots, s_slots, f_slots: number of operator MASK slots per modality.
         Should match the corpus distribution.
+
+        Input domain: total_timesteps >= 1, num_samples >= 1, slot counts >= 0,
+        and seq_len no shorter than the frame; anything else raises ValueError.
+        Each slot samples only tokens of its kind (an operator, or ATTESTED /
+        WITHHELD). Before step 0 MASK is also allowed and means "not yet"; at
+        step 0 it is not, so the T + 1 calls fill every slot with no extra pass.
         """
+        _require_int("total_timesteps", total_timesteps, 1)
+        _require_int("num_samples", num_samples, 1)
+        _require_int("g_slots", g_slots, 0)
+        _require_int("s_slots", s_slots, 0)
+        _require_int("f_slots", f_slots, 0)
         device = next(model.parameters()).device
         from pipeline.mdlm.tokenizer import (
             BOS, EOS, G_OPEN, G_CLOSE, S_OPEN, S_CLOSE, F_OPEN, F_CLOSE,
-            WIT_OFFSET, ATTESTED,
+            WIT_OFFSET, ATTESTED, OP_OFFSET,
         )
 
         # Build template with configurable slot counts
@@ -242,10 +295,27 @@ if HAS_TORCH:
             template.extend([WIT_OFFSET + w, MASK])
         template.append(EOS)
 
+        _require_int("seq_len", seq_len, len(template))
+
+        # Slot kinds: operator slots precede the witness pairs; status slots follow them.
+        n_op = len(template) - 1 - 14
+        allowed = torch.ones((seq_len, VOCAB_SIZE), dtype=torch.bool, device=device)
+        for i, tok in enumerate(template):
+            if tok == MASK:
+                allowed[i] = False
+                if i < n_op:
+                    allowed[i, OP_OFFSET:OP_OFFSET + 15] = True
+                else:
+                    allowed[i, ATTESTED] = True
+                    allowed[i, WITHHELD] = True
+        allowed_before_zero = allowed.clone()
+        for i, tok in enumerate(template):
+            if tok == MASK:
+                allowed_before_zero[i, MASK] = True
+
         # Pad to seq_len
         while len(template) < seq_len:
             template.append(PAD)
-        template = template[:seq_len]
 
         samples = torch.tensor([template] * num_samples, dtype=torch.long, device=device)
 
@@ -254,6 +324,8 @@ if HAS_TORCH:
             for step in range(total_timesteps, -1, -1):
                 t_tensor = torch.full((num_samples,), step, dtype=torch.long, device=device)
                 logits = model(samples, t_tensor)
+                keep = allowed if step == 0 else allowed_before_zero
+                logits = logits.masked_fill(~keep[: logits.size(1)], float("-inf"))
                 probs = F.softmax(logits, dim=-1)
 
                 t_frac = step / total_timesteps
@@ -264,29 +336,16 @@ if HAS_TORCH:
                             continue
 
                         pred = torch.multinomial(probs[b, i], 1).item()
-                        tier = get_tier(pred)
+                        tier = schedule_tier(pred, schedule)
 
-                        # Tier-based unmasking schedule
-                        should_unmask = False
-                        if schedule == MaskingSchedule.HIERARCHICAL:
-                            should_unmask = (tier == 1 and t_frac < 0.33) or \
-                                          (tier == 2 and 0.33 <= t_frac < 0.66) or \
-                                          (tier == 3 and t_frac >= 0.66) or \
-                                          (step == 0)  # unmask everything at final step
-                        else:
-                            should_unmask = True
+                        # Tier-based unmasking schedule; everything at the final step
+                        should_unmask = (step == 0) or \
+                            _generate_band_open(tier, t_frac, schedule)
 
                         if should_unmask:
                             samples[b, i] = pred
 
-            # Final pass: force-unmask any remaining MASK tokens
-            remaining = (samples == MASK)
-            if remaining.any():
-                t_tensor = torch.zeros((num_samples,), dtype=torch.long, device=device)
-                logits = model(samples, t_tensor)
-                for b in range(num_samples):
-                    for i in range(seq_len):
-                        if samples[b, i].item() == MASK:
-                            samples[b, i] = logits[b, i].argmax().item()
-
+        # Step 0 excludes MASK, so no slot can remain masked.
+        if (samples == MASK).any():
+            raise RuntimeError("generate(): a slot remained MASK after step 0")
         return samples
