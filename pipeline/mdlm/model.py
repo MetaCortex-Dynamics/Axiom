@@ -240,6 +240,12 @@ if HAS_TORCH:
             (tier == 3 and t_frac < 0.33)
 
 
+    def _require_int(name: str, value, minimum: int) -> None:
+        """Input domain check for generate(): an int (not bool) >= minimum."""
+        if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+            raise ValueError(f"{name} must be an int >= {minimum}, got {value!r}")
+
+
     def generate(
         model: StructureModel,
         num_samples: int,
@@ -262,11 +268,22 @@ if HAS_TORCH:
 
         g_slots, s_slots, f_slots: number of operator MASK slots per modality.
         Should match the corpus distribution.
+
+        Input domain: total_timesteps >= 1, num_samples >= 1, slot counts >= 0,
+        and seq_len no shorter than the frame; anything else raises ValueError.
+        Each slot samples only tokens of its kind (an operator, or ATTESTED /
+        WITHHELD). Before step 0 MASK is also allowed and means "not yet"; at
+        step 0 it is not, so the T + 1 calls fill every slot with no extra pass.
         """
+        _require_int("total_timesteps", total_timesteps, 1)
+        _require_int("num_samples", num_samples, 1)
+        _require_int("g_slots", g_slots, 0)
+        _require_int("s_slots", s_slots, 0)
+        _require_int("f_slots", f_slots, 0)
         device = next(model.parameters()).device
         from pipeline.mdlm.tokenizer import (
             BOS, EOS, G_OPEN, G_CLOSE, S_OPEN, S_CLOSE, F_OPEN, F_CLOSE,
-            WIT_OFFSET, ATTESTED,
+            WIT_OFFSET, ATTESTED, OP_OFFSET,
         )
 
         # Build template with configurable slot counts
@@ -278,10 +295,27 @@ if HAS_TORCH:
             template.extend([WIT_OFFSET + w, MASK])
         template.append(EOS)
 
+        _require_int("seq_len", seq_len, len(template))
+
+        # Slot kinds: operator slots precede the witness pairs; status slots follow them.
+        n_op = len(template) - 1 - 14
+        allowed = torch.ones((seq_len, VOCAB_SIZE), dtype=torch.bool, device=device)
+        for i, tok in enumerate(template):
+            if tok == MASK:
+                allowed[i] = False
+                if i < n_op:
+                    allowed[i, OP_OFFSET:OP_OFFSET + 15] = True
+                else:
+                    allowed[i, ATTESTED] = True
+                    allowed[i, WITHHELD] = True
+        allowed_before_zero = allowed.clone()
+        for i, tok in enumerate(template):
+            if tok == MASK:
+                allowed_before_zero[i, MASK] = True
+
         # Pad to seq_len
         while len(template) < seq_len:
             template.append(PAD)
-        template = template[:seq_len]
 
         samples = torch.tensor([template] * num_samples, dtype=torch.long, device=device)
 
@@ -290,6 +324,8 @@ if HAS_TORCH:
             for step in range(total_timesteps, -1, -1):
                 t_tensor = torch.full((num_samples,), step, dtype=torch.long, device=device)
                 logits = model(samples, t_tensor)
+                keep = allowed if step == 0 else allowed_before_zero
+                logits = logits.masked_fill(~keep[: logits.size(1)], float("-inf"))
                 probs = F.softmax(logits, dim=-1)
 
                 t_frac = step / total_timesteps
@@ -309,16 +345,7 @@ if HAS_TORCH:
                         if should_unmask:
                             samples[b, i] = pred
 
-            # Final pass: force-unmask any remaining MASK tokens
-            remaining = (samples == MASK)
-            if remaining.any():
-                t_tensor = torch.zeros((num_samples,), dtype=torch.long, device=device)
-                logits = model(samples, t_tensor)
-                for b in range(num_samples):
-                    for i in range(seq_len):
-                        if samples[b, i].item() == MASK:
-                            row = logits[b, i].clone()
-                            row[MASK] = float("-inf")  # never commit MASK
-                            samples[b, i] = row.argmax().item()
-
+        # Step 0 excludes MASK, so no slot can remain masked.
+        if (samples == MASK).any():
+            raise RuntimeError("generate(): a slot remained MASK after step 0")
         return samples
