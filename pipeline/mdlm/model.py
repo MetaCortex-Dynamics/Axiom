@@ -222,6 +222,24 @@ if HAS_TORCH:
         return loss
 
 
+    def _generate_band_open(tier: int, t_frac: float, schedule: MaskingSchedule) -> bool:
+        """Whether a predicted token of this tier may be committed at t_frac.
+
+        generate() counts steps down, so t_frac runs from 1 to 0. HIERARCHICAL
+        commits tier 1 first and tier 3 last, the reverse of its training
+        schedule. FLAT shares those operator bands; its readiness tokens arrive
+        as tier 2 via schedule_tier. INVERTED swaps tiers 1 and 3. UNIFORM is
+        left as it was: it commits on the first pass.
+        """
+        if schedule == MaskingSchedule.UNIFORM:
+            return True
+        if schedule == MaskingSchedule.INVERTED and tier in (1, 3):
+            tier = 4 - tier
+        return (tier == 1 and t_frac >= 0.66) or \
+            (tier == 2 and 0.33 <= t_frac < 0.66) or \
+            (tier == 3 and t_frac < 0.33)
+
+
     def generate(
         model: StructureModel,
         num_samples: int,
@@ -282,17 +300,11 @@ if HAS_TORCH:
                             continue
 
                         pred = torch.multinomial(probs[b, i], 1).item()
-                        tier = get_tier(pred)
+                        tier = schedule_tier(pred, schedule)
 
-                        # Tier-based unmasking schedule
-                        should_unmask = False
-                        if schedule == MaskingSchedule.HIERARCHICAL:
-                            should_unmask = (tier == 1 and t_frac < 0.33) or \
-                                          (tier == 2 and 0.33 <= t_frac < 0.66) or \
-                                          (tier == 3 and t_frac >= 0.66) or \
-                                          (step == 0)  # unmask everything at final step
-                        else:
-                            should_unmask = True
+                        # Tier-based unmasking schedule; everything at the final step
+                        should_unmask = (step == 0) or \
+                            _generate_band_open(tier, t_frac, schedule)
 
                         if should_unmask:
                             samples[b, i] = pred
@@ -305,6 +317,8 @@ if HAS_TORCH:
                 for b in range(num_samples):
                     for i in range(seq_len):
                         if samples[b, i].item() == MASK:
-                            samples[b, i] = logits[b, i].argmax().item()
+                            row = logits[b, i].clone()
+                            row[MASK] = float("-inf")  # never commit MASK
+                            samples[b, i] = row.argmax().item()
 
         return samples
