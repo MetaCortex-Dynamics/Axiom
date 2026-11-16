@@ -9,7 +9,7 @@ Architecture:
 
 Masking schedules:
   A: hierarchical hierarchical (Tier 1 → Tier 2 → Tier 3+readiness)
-  B: flat hierarchical (operators only, no readiness staging)
+  B: flat (3-6-6): operator tiers as in A, readiness tokens in Tier 2
   C: Uniform random
   D: inverted inverted
 
@@ -33,8 +33,10 @@ except ImportError:
 from pipeline.mdlm.tokenizer import (
     VOCAB_SIZE, MASK, PAD, NEVER_MASKED,
     TIER_1_TOKENS, TIER_2_TOKENS, TIER_3_TOKENS,
+    WIT_OFFSET, ATTESTED, WITHHELD,
     get_tier, pad_sequence,
 )
+from pipeline.types import Witness
 
 
 class MaskingSchedule(str, Enum):
@@ -43,6 +45,21 @@ class MaskingSchedule(str, Enum):
     FLAT = "B"  # flat: operators only, uniform within tiers
     UNIFORM = "C"           # uniform random over all maskable tokens
     INVERTED = "D"      # inverted: CL first, Tier 1 last
+
+
+# Readiness tokens: the 7 witness-identity tokens plus ATTESTED and WITHHELD.
+READINESS_TOKENS = frozenset({WIT_OFFSET + w for w in Witness} | {ATTESTED, WITHHELD})
+
+
+def schedule_tier(token_id: int, schedule: MaskingSchedule) -> int:
+    """Masking tier of a token under a schedule.
+
+    HIERARCHICAL (3-6-9) keeps readiness tokens in Tier 3.
+    FLAT (3-6-6) demotes them to Tier 2. Operator tiers are shared.
+    """
+    if schedule == MaskingSchedule.FLAT and token_id in READINESS_TOKENS:
+        return 2
+    return get_tier(token_id)
 
 
 if HAS_TORCH:
@@ -112,7 +129,7 @@ if HAS_TORCH:
                 if tok in NEVER_MASKED:
                     continue
 
-                tier = get_tier(tok)
+                tier = schedule_tier(tok, schedule)
                 if tier == 0:
                     continue
 
@@ -150,7 +167,8 @@ if HAS_TORCH:
                 return base_rate * min(1.0, t_frac / 0.33)
 
         if schedule == MaskingSchedule.FLAT:
-            # Same as 369 but witness tokens are tier 2 priority
+            # Same per-tier timing as HIERARCHICAL; readiness tokens arrive
+            # here as tier 2 via schedule_tier().
             if tier == 1:
                 return base_rate * max(0.0, (t_frac - 0.66) / 0.34) if t_frac > 0.66 else 0.0
             elif tier == 2:
